@@ -292,6 +292,12 @@ nav.breadcrumb-nav {
   text-align: left;
   margin-bottom: 0;
 }
+
+.reviews-title {
+  text-align: left;
+  margin-bottom: 0.5em;
+}
+
 #reviews-list {
   margin: 0;
   padding: 0;
