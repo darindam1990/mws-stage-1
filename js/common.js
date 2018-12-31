@@ -2,6 +2,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
   registerServiceWorker();
 });
 
+
+
 /**
  * Register service worker
  */

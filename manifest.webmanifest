@@ -1,0 +1,22 @@
+{
+    "name": "MWS - Restaurant Reviews",
+    "short_name": "MWS",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#fff",
+    "theme_color": "#317EFB",
+    "description": "A PWA implementation of a restaurant reviews App",
+    "icons": [
+        {
+            "src": "img/homescreen192.jpg",
+            "sizes": "192x192",
+            "type": "image/jpg"
+        },
+        {
+            "src": "img/homescreen512.jpg",
+            "sizes": "512x512",
+            "type": "image/jpg"
+        }
+    ],
+    "related_applications": []
+}

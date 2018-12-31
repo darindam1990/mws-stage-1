@@ -1,3 +1,18 @@
+document.addEventListener('DOMContentLoaded', (event) => {
+  _dbPromise = openDatabase();
+});
+
+openDatabase = () => {
+  if (!navigator.serviceWorker) {
+    return Promise.resolve();
+  }
+  return idb.open('mws-restaurants', 1, function (upgradeDb) {
+    upgradeDb.createObjectStore('mws-restaurants', {
+      keyPath: 'id'
+    });
+  });
+}
+
 /**
  * Common database helper functions.
  */
@@ -16,38 +31,95 @@ class DBHelper {
    * Fetch all restaurants.
    */
   static fetchRestaurants(callback) {
-    let xhr = new XMLHttpRequest();
-    xhr.open('GET', DBHelper.DATABASE_URL);
-    xhr.onload = () => {
-      if (xhr.status === 200) { // Got a success response from server!
-        const json = JSON.parse(xhr.responseText);
-        const restaurants = json.restaurants;
-        callback(null, restaurants);
-      } else { // Oops!. Got an error from server.
-        const error = (`Request failed. Returned status of ${xhr.status}`);
-        callback(error, null);
+    if (typeof _dbPromise === 'undefined') return;
+    DBHelper.showCachedData(callback);
+    fetch('http://localhost:1337/restaurants')
+      .then(response => response.json())
+      .then(data => {
+        // cache the response to idb
+        DBHelper.cacheToDb(data);
+        // process the response and invoke callback
+        DBHelper.invokeCb(callback, data);
+      })
+      .catch(error => callback(error, null));
+  }
+
+  static invokeCb(callback, data) {
+    // Casa Enrique (id: 10) is missing photograph key in response
+    const missingId = 10;
+    let modifiedData;
+    if (Array.isArray(data)) {
+      modifiedData = data.map(o => {
+        return {
+          ...o,
+          photograph: `${o.photograph || missingId}.webp`
+        };
+      });
+    } else {
+      modifiedData = {
+        ...data,
+        photograph: `${data.photograph || missingId}.webp`
+      };
+    }
+    callback(null, modifiedData);
+  }
+
+  static showCachedData(callback, id) {
+    return _dbPromise.then(function (db) {
+      if (!db) return;
+
+      var store = db
+        .transaction('mws-restaurants')
+        .objectStore('mws-restaurants');
+
+      // if it is a single record, we invoke a store.get()
+      // instead of store.getAll()
+      if (id) {
+        return store.get(Number(id)).then(function (data) {
+          DBHelper.invokeCb(callback, data);
+        });
       }
-    };
-    xhr.send();
+
+      return store.getAll().then(function (data) {
+        DBHelper.invokeCb(callback, data);
+      });
+    });
+  };
+
+  static cacheToDb(data) {
+    return _dbPromise.then(function (db) {
+      if (!db) {
+        return;
+      }
+      var tx = db.transaction('mws-restaurants', 'readwrite');
+      var store = tx.objectStore('mws-restaurants');
+      if (Array.isArray(data)) {
+        data.forEach(function (restaurant) {
+          store.put(restaurant);
+        });
+      } else {
+        store.put(data);
+      }
+    });
   }
 
   /**
    * Fetch a restaurant by its ID.
    */
   static fetchRestaurantById(id, callback) {
-    // fetch all restaurants with proper error handling.
-    DBHelper.fetchRestaurants((error, restaurants) => {
-      if (error) {
-        callback(error, null);
-      } else {
-        const restaurant = restaurants.find(r => r.id == id);
-        if (restaurant) { // Got the restaurant
-          callback(null, restaurant);
-        } else { // Restaurant does not exist in the database
-          callback('Restaurant does not exist', null);
-        }
-      }
-    });
+    DBHelper.showCachedData(callback, id);
+    // although restuarants data is already loaded
+    // a GET call for restauarant may serve more info
+    // than a GET all call; so we fetch by id
+    fetch(`http://localhost:1337/restaurants/${id}`)
+      .then(response => response.json())
+      .then(data => {
+        // cache the response to idb
+        DBHelper.cacheToDb(data);
+        // process the response and invoke callback
+        DBHelper.invokeCb(callback, data);
+      })
+      .catch(error => callback(error, null));
   }
 
   /**
@@ -156,14 +228,15 @@ class DBHelper {
   /**
    * Map marker for a restaurant.
    */
-   static mapMarkerForRestaurant(restaurant, map) {
+  static mapMarkerForRestaurant(restaurant, map) {
     // https://leafletjs.com/reference-1.3.0.html#marker
     const marker = new L.marker([restaurant.latlng.lat, restaurant.latlng.lng],
-      {title: restaurant.name,
-      alt: restaurant.name,
-      url: DBHelper.urlForRestaurant(restaurant)
+      {
+        title: restaurant.name,
+        alt: restaurant.name,
+        url: DBHelper.urlForRestaurant(restaurant)
       })
-      marker.addTo(newMap);
+    marker.addTo(newMap);
     return marker;
   }
   /* static mapMarkerForRestaurant(restaurant, map) {

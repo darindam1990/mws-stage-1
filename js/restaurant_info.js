@@ -16,6 +16,10 @@ initMap = () => {
     if (error) { // Got an error!
       console.error(error);
     } else {
+      if (self.newMap) {
+        // if map exists remove before redraw
+        self.newMap.remove();
+      }
       self.newMap = L.map('map', {
         center: [restaurant.latlng.lat, restaurant.latlng.lng],
         zoom: 16,
@@ -188,6 +192,9 @@ createReviewHTML = (review) => {
  */
 fillBreadcrumb = (restaurant = self.restaurant) => {
   const breadcrumb = document.getElementById('breadcrumb');
+  // the method is invoked twice - once for cache & once for fetch
+  // remove all but first child so that there is no duplicate node
+  Array.prototype.slice.call(breadcrumb.children, 1).forEach(el => el.remove());
   const li = document.createElement('li');
   li.innerHTML = restaurant.name;
   breadcrumb.appendChild(li);
