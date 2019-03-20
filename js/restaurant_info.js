@@ -1,3 +1,22 @@
+// Simple focus trap for dialog
+window.onload = function() {
+  var firstAnchor = document.getElementById("name"),
+      lastAnchor = document.getElementById("cancel-btn");
+
+  function keydownHandler(e) {
+      var evt = e || window.event;
+      var keyCode = evt.which || evt.keyCode;
+      if(keyCode === 9) { // TAB pressed
+          if(evt.preventDefault) evt.preventDefault();
+          else evt.returnValue = false;
+          firstAnchor.focus();
+      }
+  }
+  if(lastAnchor.addEventListener) lastAnchor.addEventListener('keydown', keydownHandler, false);
+  else if(lastAnchor.attachEvent) lastAnchor.attachEvent('onkeydown', keydownHandler);
+}
+
+
 let restaurant;
 var newMap;
 
@@ -87,6 +106,14 @@ fillRestaurantHTML = (restaurant = self.restaurant) => {
   const name = document.getElementById('restaurant-name');
   name.innerHTML = restaurant.name;
 
+  const favEl = document.getElementById('is-favorite');
+  // API saves is_favorite as string instead of boolean
+  if (restaurant.is_favorite === 'true') {
+    favEl.innerHTML = '♥';
+  } else {
+    favEl.innerHTML = '♡';
+  }
+
   const address = document.getElementById('restaurant-address');
   address.setAttribute('aria-label', 'Restaurant Address');
   address.innerHTML = restaurant.address;
@@ -133,11 +160,6 @@ fillRestaurantHoursHTML = (operatingHours = self.restaurant.operating_hours) => 
  */
 fillReviewsHTML = (reviews = self.restaurant.reviews) => {
   const container = document.getElementById('reviews-container');
-  const title = document.createElement('h3');
-  title.className = 'reviews-title';
-  title.innerHTML = 'Reviews';
-  container.appendChild(title);
-
   if (!reviews) {
     const noReviews = document.createElement('p');
     noReviews.innerHTML = 'No reviews yet!';
@@ -145,10 +167,22 @@ fillReviewsHTML = (reviews = self.restaurant.reviews) => {
     return;
   }
   const ul = document.getElementById('reviews-list');
+  // reset reviews
+  while (ul.firstElementChild) {
+    ul.removeChild(ul.firstElementChild);
+  }
   reviews.forEach(review => {
     ul.appendChild(createReviewHTML(review));
   });
+
   container.appendChild(ul);
+
+  const dialog = document.getElementById('formBlock');
+  dialog.addEventListener('close', (e) => {
+    const backDrop = document.getElementById('backDrop');
+    backDrop.classList.remove('show');
+  });
+
 }
 
 /**
@@ -166,7 +200,7 @@ createReviewHTML = (review) => {
   titleCt.appendChild(name);
 
   const date = document.createElement('span');
-  date.innerHTML = review.date;
+  date.innerHTML = new Date(review.updatedAt).toDateString();
   date.className = 'review-date';
   titleCt.appendChild(date);
 
@@ -214,4 +248,57 @@ getParameterByName = (name, url) => {
   if (!results[2])
     return '';
   return decodeURIComponent(results[2].replace(/\+/g, ' '));
+}
+
+showForm = () => {
+  const formBlock = document.getElementById('formBlock');
+  const backDrop = document.getElementById('backDrop');
+  if (!formBlock.hasAttribute('open')) {
+    formBlock.showModal();
+    backDrop.classList.add('show');
+  } else {
+    formBlock.close();
+    backDrop.classList.remove('show');
+  }
+}
+
+onFormSubmit = (cancel = false) => {
+  if (cancel) {
+    showForm();
+    return;
+  }
+  const form = document.getElementById('review-form');
+  const data = Object.values(form).reduce(
+    (obj, field) => {
+      if (field.type === 'radio' && !field.checked) return obj;
+      obj[field.name] = field.value;
+      return obj
+    }, {}
+  );
+  data.restaurant_id = self.restaurant.id;
+  data.updatedAt = Date.now();
+  data.isPhantom = true;
+  self.restaurant.reviews = [...self.restaurant.reviews, data];
+  DBHelper.submitReviewForRestaurant(self.restaurant, data);
+  fillReviewsHTML();
+  showForm();
+  form.reset();
+}
+
+onKeyPress = (btn, cancel = false) => {
+  if (document.activeElement === btn) {
+    onFormSubmit(cancel);
+  }
+}
+
+markAsFavorite = (el) => {
+  if (el.innerHTML === '♡') {
+    el.innerHTML = '♥';
+    self.restaurant.is_favorite = true;
+    DBHelper.toggleIsFavorite(self.restaurant, true);
+  } else if (el.innerHTML === '♥') {
+    el.innerHTML = '♡';
+    self.restaurant.is_favorite = false;
+    DBHelper.toggleIsFavorite(self.restaurant, false);
+  }
 }

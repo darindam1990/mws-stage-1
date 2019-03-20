@@ -52,13 +52,13 @@ class DBHelper {
       modifiedData = data.map(o => {
         return {
           ...o,
-          photograph: `${o.photograph || missingId}.webp`
+          photograph: `${o.photograph && o.photograph.split('.')[0] || missingId}.webp`
         };
       });
     } else {
       modifiedData = {
         ...data,
-        photograph: `${data.photograph || missingId}.webp`
+        photograph: `${data.photograph && data.photograph.split('.')[0] || missingId}.webp`
       };
     }
     callback(null, modifiedData);
@@ -76,7 +76,9 @@ class DBHelper {
       // instead of store.getAll()
       if (id) {
         return store.get(Number(id)).then(function (data) {
-          DBHelper.invokeCb(callback, data);
+          if (data) {
+            DBHelper.invokeCb(callback, data);
+          }
         });
       }
 
@@ -109,17 +111,91 @@ class DBHelper {
   static fetchRestaurantById(id, callback) {
     DBHelper.showCachedData(callback, id);
     // although restuarants data is already loaded
-    // a GET call for restauarant may serve more info
+    // a GET call for restaurant may serve more info
     // than a GET all call; so we fetch by id
-    fetch(`http://localhost:1337/restaurants/${id}`)
-      .then(response => response.json())
-      .then(data => {
+    const restaurantDetails = fetch(`http://localhost:1337/restaurants/${id}`)
+      .then(response => response.json());
+    const restaurantReviews = fetch(`http://localhost:1337/reviews?restaurant_id=${id}`)
+      .then(response => response.json());
+
+    Promise.all([restaurantDetails, restaurantReviews])
+      .then(([restaurant, reviews]) => {
+        restaurant.reviews = reviews;
         // cache the response to idb
-        DBHelper.cacheToDb(data);
+        DBHelper.cacheToDb(restaurant);
         // process the response and invoke callback
-        DBHelper.invokeCb(callback, data);
+        DBHelper.invokeCb(callback, restaurant);
       })
       .catch(error => callback(error, null));
+  }
+
+
+  /**
+   * Fetch reviews for a restaurant.
+   */
+  static submitReviewForRestaurant(restaurant, review) {
+    DBHelper.cacheToDb(restaurant);
+    let timerId = null;
+    (function fetchRetry() {
+      if (timerId) {
+        clearTimeout(timerId);
+      }
+      fetch(`http://localhost:1337/reviews`, {
+        method: 'post',
+        body: JSON.stringify(DBHelper.omit(review, ['isPhantom']))
+      })
+        .then(response => response.json())
+        .then(data => {
+          restaurant.reviews = restaurant.reviews.filter(o => !o.isPhantom).concat(data);
+          DBHelper.cacheToDb(restaurant);
+        })
+        .catch(error => {
+          // retry until success
+          timerId = setTimeout(() => {
+            fetchRetry();
+          }, 2000);
+        });
+    })();
+
+  }
+
+  /**
+   * mark/unmark restaurant as favorite.
+   */
+  static toggleIsFavorite(restaurant, isFavorite) {
+    DBHelper.cacheToDb(restaurant);
+    let timerId = null;
+    (function fetchRetry() {
+      if (timerId) {
+        clearTimeout(timerId);
+      }
+      fetch(`http://localhost:1337/restaurants/${restaurant.id}/?is_favorite=${isFavorite}`, {
+        method: 'put',
+        body: JSON.stringify({})
+      })
+        .then(response => response.json())
+        .then(data => {
+          restaurant.is_favorite = data.is_favorite;
+          DBHelper.cacheToDb(restaurant);
+        })
+        .catch(error => {
+          // retry until success
+          timerId = setTimeout(() => {
+            fetchRetry();
+          }, 2000);
+        });
+    })();
+
+  }
+
+  static omit(obj, keys) {
+    const result = {};
+    for (const key in obj) {
+      if (!keys.includes(key)) {
+        result[key] = obj[key];
+      }
+    }
+    return result;
   }
 
   /**

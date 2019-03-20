@@ -8,14 +8,14 @@
     "description": "A PWA implementation of a restaurant reviews App",
     "icons": [
         {
-            "src": "img/homescreen192.jpg",
+            "src": "img/homescreen192.png",
             "sizes": "192x192",
-            "type": "image/jpg"
+            "type": "image/png"
         },
         {
-            "src": "img/homescreen512.jpg",
+            "src": "img/homescreen512.png",
             "sizes": "512x512",
-            "type": "image/jpg"
+            "type": "image/png"
         }
     ],
     "related_applications": []
